@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Électrostimulation épicardique</title>
+<meta name="description" content="Simulateur de garde : électrostimulation épicardique après chirurgie cardiaque (boîtier Medtronic 5392) : seuils, modes, pannes, garde.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%238A2B22%27/%3E%3Cpath d=%27M3 20 L10 20 L10 6 L10 20 L13 20 L15 12 L17 24 L19 20 L29 20%27 fill=%27none%27 stroke=%27white%27 stroke-width=%272.3%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Poste de garde : moniteur sombre à gauche, boîtier Medtronic 5392 reproduit à droite, consignes en dessous. */
+:root{
+  --bg:#FAF8F8; --surface:#FFFFFF; --sunk:#F1ECEB; --line:#DED6D4;
+  --ink:#1F1A19; --ink2:#5A4F4D; --accent:#8A2B22; --accent-soft:#F4E4E1;
+  --ok:#2F6B3A; --bad:#A2421B; --warn-bg:#FFF4DC; --warn:#7A5300;
+  --mon:#141010; --mon-grid:#3A3231; --mon-text:#BFB6B4; --ecg:#7CC48A; --art:#E57373;
+  --dev:#2B3140; --dev2:#1C2029; --lcd:#C9CDB8; --lcd-ink:#1E2418;
+  --f-display:"Source Serif 4", Cambria, Georgia, serif;
+  --f-body:"Source Sans 3", Calibri, "Segoe UI", system-ui, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#161212; --surface:#1F1A19; --sunk:#2A2322; --line:#3A3231;
+  --ink:#F1ECEB; --ink2:#BFB6B4; --accent:#E07A6E; --accent-soft:#3A2220;
+  --ok:#7CC48A; --bad:#F0956C; --warn-bg:#3A2F16; --warn:#F1C66B; --mon:#0B0808; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#161212; --surface:#1F1A19; --sunk:#2A2322; --line:#3A3231;
+  --ink:#F1ECEB; --ink2:#BFB6B4; --accent:#E07A6E; --accent-soft:#3A2220;
+  --ok:#7CC48A; --bad:#F0956C; --warn-bg:#3A2F16; --warn:#F1C66B; --mon:#0B0808; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5;margin:0;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;border-bottom:2px solid var(--accent);padding-bottom:12px}
+h1{font-family:var(--f-display);font-size:clamp(26px,4vw,34px);margin:0;line-height:1.1;text-wrap:balance}
+.sub{color:var(--ink2);margin:4px 0 0;font-size:15px}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tab{font:600 14px var(--f-body);padding:8px 12px;border:1px solid var(--line);background:var(--surface);color:var(--ink2);border-radius:6px;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.eyebrow{font:700 12px var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0}
+h2{font-family:var(--f-display);font-size:21px;margin:0;line-height:1.2;text-wrap:balance}
+h3{font:700 15px var(--f-body);margin:0}
+p{margin:0} ul,ol{margin:0;padding-left:20px}
+.muted{color:var(--ink2);font-size:14px}
+/* moniteur */
+.monitor{background:var(--mon);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.monitor canvas{width:100%;display:block;border-radius:4px}
+.readouts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;color:var(--mon-text);font-family:var(--f-mono)}
+.ro span{display:block;font-size:12px;letter-spacing:.04em}
+.ro b{font:700 26px var(--f-mono);font-variant-numeric:tabular-nums;line-height:1.1}
+.ro.ecg b{color:var(--ecg)} .ro.art b{color:var(--art)}
+.ro small{font-size:13px}
+.actions{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+button.act{font:600 14px var(--f-body);padding:8px 10px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;text-align:left}
+button.main{font:700 15px var(--f-body);padding:9px 14px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:var(--surface);cursor:pointer}
+button.ghost{font:600 15px var(--f-body);padding:9px 14px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.log{display:flex;flex-direction:column;gap:6px}
+.alert{border-radius:6px;padding:9px 12px;font-size:14px;background:var(--warn-bg);color:var(--warn)}
+.alert.call{background:var(--accent-soft);color:var(--accent);font-weight:700}
+/* boîtier */
+.dev{background:var(--dev);border-radius:14px;padding:12px 12px 14px;display:flex;flex-direction:column;gap:8px;color:#E9ECF2;box-shadow:0 2px 0 var(--dev2) inset}
+.devtop{display:flex;justify-content:space-between;align-items:center}
+.doo{font:800 13px var(--f-body);background:#D93A3A;color:#fff;border:0;border-radius:6px;padding:6px 10px;cursor:pointer;letter-spacing:.04em}
+.leds{display:flex;gap:10px;font:700 11px var(--f-mono);color:#AEB4C2}
+.led{display:inline-flex;align-items:center;gap:4px}
+.led i{width:9px;height:9px;border-radius:50%;background:#3A4152;display:inline-block}
+.led.pace.on i{background:#7CC04B;box-shadow:0 0 6px #7CC04B}
+.led.sense.on i{background:#F2A93B;box-shadow:0 0 6px #F2A93B}
+.lcd{background:var(--lcd);color:var(--lcd-ink);border-radius:6px;padding:6px 8px;font-family:var(--f-mono)}
+.knobrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid #AEB39C}
+.knobrow:last-child{border-bottom:0}
+.knobrow .lab{font:700 11px var(--f-body);letter-spacing:.04em;text-transform:uppercase;color:#4A5240}
+.knobrow .val{font:700 24px var(--f-mono);line-height:1.1;font-variant-numeric:tabular-nums}
+.knobrow .val small{font-size:12px}
+.knobs{display:flex;gap:4px}
+.knob{width:38px;height:38px;border-radius:50%;background:#111;color:#E9ECF2;border:2px solid #000;font:700 18px var(--f-body);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.knob:active{background:#333}
+.keyrow{display:flex;justify-content:flex-end}
+.keyb{font:700 12px var(--f-body);background:#111;color:#9BE36D;border:1.5px solid #7CC04B;border-radius:6px;padding:5px 10px;cursor:pointer}
+.keyb[aria-pressed="true"]{background:#7CC04B;color:#111}
+.menu .item{display:flex;justify-content:space-between;align-items:center;padding:4px 6px;border-radius:4px;cursor:pointer;font-size:14px}
+.menu .item.sel{background:var(--lcd-ink);color:var(--lcd)}
+.menu .item b{font-size:15px}
+.menubtns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.mb{font:700 16px var(--f-body);background:#111;color:#fff;border:1.5px solid #9AA1B0;border-radius:6px;padding:6px 0;cursor:pointer}
+.pause{font:800 13px var(--f-body);background:#111;color:#E8C43A;border:1.5px solid #E8C43A;border-radius:6px;padding:7px 0;cursor:pointer;width:100%}
+.pause[aria-pressed="true"]{background:#E8C43A;color:#111}
+.devmsg{font:600 12px var(--f-body);color:#F2C14E;min-height:18px}
+/* consignes et corrections */
+.opts{display:flex;flex-direction:column;gap:6px}
+.opt{display:flex;gap:10px;align-items:flex-start;padding:8px 12px;border:1px solid var(--line);border-radius:6px;cursor:pointer;background:var(--surface)}
+.opt input{margin-top:4px;accent-color:var(--accent)}
+.opt.good{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,var(--surface))}
+.opt.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,var(--surface))}
+.fb{border-top:2px solid var(--accent);padding-top:10px;display:flex;flex-direction:column;gap:8px}
+.verdict{font-weight:700} .verdict.ok{color:var(--ok)} .verdict.ko{color:var(--bad)}
+.note{background:var(--sunk);border-radius:6px;padding:10px 12px;font-size:14px}
+.steps{display:flex;flex-direction:column;gap:6px}
+.steps li{font-size:15px}
+.field{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:600;font-size:15px}
+.field input,.field select{font:700 15px var(--f-mono);width:110px;padding:6px 8px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.field select{width:auto;font-family:var(--f-body)}
+.exlist{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:600 14px var(--f-body);padding:6px 10px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.chip.done::after{content:" ✓";color:var(--ok)}
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.sum div{background:var(--sunk);border-radius:6px;padding:8px 10px}
+.sum span{display:block;font-size:12px;color:var(--ink2)} .sum b{font:700 18px var(--f-mono)}
+footer{font-size:12px;color:var(--ink2);border-top:1px solid var(--line);padding-top:10px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<header>
+  <div>
+    <h1>Électrostimulation épicardique</h1>
+    <p class="sub">Simulateur de garde · boîtier Medtronic 5392 · internes de chirurgie cardiaque</p>
+  </div>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-view="learn">Apprendre</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="fix">Dépanner</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="night">Garde</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="free">Libre</button>
+  </div>
+</header>
+
+<div class="grid">
+  <div class="panel">
+    <p class="eyebrow" id="pt-eyebrow">Moniteur</p>
+    <div class="monitor">
+      <canvas id="cv" width="900" height="340" aria-label="ECG et pression artérielle du patient"></canvas>
+      <div class="readouts">
+        <div class="ro ecg"><span>FC</span><b id="r-fc">–</b></div>
+        <div class="ro art"><span>PA</span><b id="r-pa">–</b></div>
+        <div class="ro"><span>Patient</span><b id="r-pt" style="font-size:13px;line-height:1.3;display:block;font-family:var(--f-body)">–</b></div>
+      </div>
+    </div>
+    <div id="bed" hidden>
+      <h3 style="margin-bottom:6px">Au lit du patient</h3>
+      <div class="actions" id="acts"></div>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <div class="dev" aria-label="Boîtier de stimulation temporaire">
+    <div class="devtop">
+      <button class="doo" id="b-doo" title="Stimulation d'urgence DOO">⚠ DOO</button>
+      <div class="leds"><span class="led pace" id="l-ap"><i></i>A·P</span><span class="led sense" id="l-as"><i></i>A·S</span><span class="led pace" id="l-vp"><i></i>V·P</span><span class="led sense" id="l-vs"><i></i>V·S</span></div>
+    </div>
+    <div class="lcd">
+      <div class="knobrow"><div><div class="lab">Fréquence</div><div class="val"><span id="d-rate"></span> <small>/min</small></div></div><div class="knobs"><button class="knob" data-k="rate" data-d="-1" aria-label="Fréquence moins">−</button><button class="knob" data-k="rate" data-d="1" aria-label="Fréquence plus">+</button></div></div>
+      <div class="knobrow"><div><div class="lab">Sortie A</div><div class="val"><span id="d-aout"></span> <small>mA</small></div></div><div class="knobs"><button class="knob" data-k="aout" data-d="-1" aria-label="Sortie A moins">−</button><button class="knob" data-k="aout" data-d="1" aria-label="Sortie A plus">+</button></div></div>
+      <div class="knobrow"><div><div class="lab">Sortie V</div><div class="val"><span id="d-vout"></span> <small>mA</small></div></div><div class="knobs"><button class="knob" data-k="vout" data-d="-1" aria-label="Sortie V moins">−</button><button class="knob" data-k="vout" data-d="1" aria-label="Sortie V plus">+</button></div></div>
+    </div>
+    <div class="keyrow"><button class="keyb" id="b-key" aria-pressed="false">🔑 Verrou</button></div>
+    <div class="lcd menu" id="menu"></div>
+    <div class="menubtns"><button class="mb" id="m-up" aria-label="Valeur plus">▲</button><button class="mb" id="m-dn" aria-label="Valeur moins">▼</button><button class="mb" id="m-next" aria-label="Paramètre suivant">↵</button></div>
+    <button class="pause" id="b-pause" aria-pressed="false">❚❚ Pause</button>
+    <div class="devmsg" id="devmsg"></div>
+  </div>
+</div>
+
+<!-- APPRENDRE -->
+<section class="panel" id="v-learn">
+  <p class="eyebrow">Apprendre · exercices guidés</p>
+  <div class="exlist" id="ex-chips"></div>
+  <h2 id="ex-title"></h2>
+  <p id="ex-ctx"></p>
+  <ol class="steps" id="ex-steps"></ol>
+  <div id="ex-form"></div>
+  <div class="btns"><button class="main" id="ex-check">Valider</button><button class="ghost" id="ex-reset">Recommencer</button></div>
+  <div class="fb" id="ex-fb" hidden></div>
+</section>
+
+<!-- DEPANNER -->
+<section class="panel" id="v-fix" hidden>
+  <p class="eyebrow">Dépanner · patient inconnu</p>
+  <h2 id="fx-title"></h2>
+  <p id="fx-ctx"></p>
+  <h3>1. Quelle est la panne ?</h3>
+  <div class="opts" id="fx-opts"></div>
+  <div class="btns"><button class="main" id="fx-diag">Valider le diagnostic</button><button class="ghost" id="fx-skip">Autre panne</button></div>
+  <div class="fb" id="fx-fb1" hidden></div>
+  <div id="fx-step2" hidden>
+    <h3>2. Corrigez sur le boîtier ou au lit, puis vérifiez</h3>
+    <div class="btns" style="margin-top:8px"><button class="main" id="fx-check">Vérifier ma correction</button><button class="ghost" id="fx-next">Panne suivante</button></div>
+    <div class="fb" id="fx-fb2" hidden style="margin-top:10px"></div>
+  </div>
+  <p class="muted" id="fx-score">Score : 0 / 0</p>
+</section>
+
+<!-- GARDE -->
+<section class="panel" id="v-night" hidden>
+  <p class="eyebrow">Garde · une nuit en accéléré</p>
+  <h2>Remplacement valvulaire aortique, J0, BAV complet</h2>
+  <p>Homme de 72 ans, opéré ce matin. BAV complet après la décalcification de l'anneau, échappement ventriculaire très lent : il est <b>dépendant du stimulateur</b>. Fils auriculaires et ventriculaires, DDD à 80/min. Vous êtes seul de garde. Trois événements vont survenir : réagissez sur le boîtier et au lit.</p>
+  <div class="btns"><button class="main" id="n-start">Commencer la garde</button><button class="ghost" id="n-stop" hidden>Terminer maintenant</button></div>
+  <div id="n-status" class="muted"></div>
+  <div class="fb" id="n-fb" hidden></div>
+</section>
+
+<!-- LIBRE -->
+<section class="panel" id="v-free" hidden>
+  <p class="eyebrow">Libre · réglez et observez</p>
+  <div class="field"><label for="f-pt">Rythme propre</label><select id="f-pt"></select></div>
+  <div class="field"><label for="f-w">Fils posés</label><select id="f-w"><option value="AV">Auriculaires et ventriculaires</option><option value="V">Ventriculaires seuls</option></select></div>
+  <p class="muted">Changez un réglage à la fois et regardez le tracé, les témoins du boîtier et la pression artérielle. Seuils de ce patient : capture A <span id="f-ta"></span> mA, capture V <span id="f-tv"></span> mA ; ondes P <span id="f-pa"></span> mV, QRS <span id="f-ra"></span> mV.</p>
+</section>
+
+<footer>Outil de formation. Modèle pédagogique simplifié : il reproduit la logique de stimulation, de détection et de capture, pas un patient réel. Les plages de réglage s'inspirent du Medtronic 5392 ; se référer à la notice du fabricant. Fiche mémo et capsule du service : électrostimulation épicardique.</footer>
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt=(v,d=0)=>Number(v).toFixed(d).replace(".",",");
+const G=(x,c,w)=>Math.exp(-(((x-c)/w)**2));
+const R=(a,b)=>a+Math.random()*(b-a), PICK=a=>a[Math.floor(Math.random()*a.length)];
+
+// ---------- réglages du boîtier (plages inspirées du 5392) ----------
+const STEPS={
+  rate:[30,35,40,45,50,55,60,65,70,75,80,85,90,95,100,110,120,130,140,150],
+  aout:[0.5,1,1.5,2,2.5,3,3.5,4,5,6,7,8,9,10,12,14,16,18,20],
+  vout:[0.5,1,1.5,2,2.5,3,3.5,4,5,6,7,8,9,10,12,14,16,18,20,22,25],
+  asens:[0.4,0.5,0.75,1,1.5,2,2.5,3,4,5,6,8,10],
+  vsens:[0.8,1,1.5,2,2.5,3,4,5,6,8,10,12,15,20],
+  av:[50,80,100,120,150,170,200,250],
+  mode:["DDD","DDI","AAI","VVI","DOO","AOO","VOO"]};
+const MENU=[["mode","Mode",""],["asens","Sensibilité A","mV"],["vsens","Sensibilité V","mV"],["av","Délai AV","ms"]];
+const D={mode:"VVI",rate:80,aout:10,vout:10,asens:0.5,vsens:2,av:150,locked:false,pauseUntil:0,menuSel:0};
+const URI=0.5; // fréquence maximale de suivi : 120/min
+
+// ---------- patient ----------
+// rythme : sinus (fréquence, conduction AV), bav3 (oreillette sinusale, échappement ventriculaire), fa (réponse ventriculaire)
+const PATIENTS={
+  sinus:{n:"Rythme sinusal 72/min, conduction normale", r:"sinus", sr:72, cond:true, esc:0},
+  brady:{n:"Bradycardie sinusale 42/min, conduction normale", r:"sinus", sr:42, cond:true, esc:0},
+  bav3:{n:"BAV complet, échappement 32/min", r:"sinus", sr:85, cond:false, esc:32},
+  bav3lent:{n:"BAV complet, sinus 55/min, échappement 30/min", r:"sinus", sr:55, cond:false, esc:30},
+  bav3d:{n:"BAV complet sans échappement (dépendant)", r:"sinus", sr:85, cond:false, esc:0},
+  falente:{n:"FA lente 45/min", r:"fa", vr:45, esc:0},
+  sinus88:{n:"Rythme sinusal 88/min, conduction normale", r:"sinus", sr:88, cond:true, esc:0}};
+const P={def:null, wires:"AV", aCap:1.5, vCap:2.5, pAmp:2.5, rAmp:7, fAmp:0.7,
+  faults:{noise:0, disc:false, cross:false}, cutane:false, iso:false};
+function setPatient(key,opts={}){
+  P.def={...PATIENTS[key]}; P.key=key;
+  Object.assign(P,{wires:"AV",aCap:R(1,2.5),vCap:R(1.5,3.5),pAmp:R(2,3.5),rAmp:R(6,10),fAmp:0.7,faults:{noise:0,disc:false,cross:false},cutane:false,iso:false},opts);
+  P.aCap=Math.round(P.aCap*2)/2; P.vCap=Math.round(P.vCap*2)/2;
+  $("r-pt").textContent=P.def.n+(P.wires==="V"?" · fils V seuls":" · fils A + V");
+}
+
+// ---------- moteur (pas de 4 ms) ----------
+const DT=0.004;
+const S={t:0, lastV:-9, lastA:-9, lastVdev:-9, lastAdev:-9, nextP:0.5, nextAFv:1, vRef:-9, aRef:-9,
+  pendV:null, pendCond:null, pvarp:-9, pa:75, ev:[], spikes:[], noiseOn:false, noiseEnd:0, nextNoise:3,
+  rr:[], paWin:[], asys:0, minMap:200, mapNow:80};
+function ventDepol(t,kind){ // kind : n (étroit conduit), w (échappement large), p (stimulé)
+  if(t-S.lastV<0.28) return false;
+  const sync = (t-S.lastA>0.07 && t-S.lastA<0.32) ? 1 : 0.8;
+  const rrv=t-S.lastV; S.rr.push(Math.min(rrv,3)); if(S.rr.length>5) S.rr.shift();
+  const fill=Math.max(0.3,Math.min(1.1,(rrv-0.18)/0.62));
+  const sv=75*sync*fill*(kind==="n"?1:0.92)*(P.iso?1.1:1);
+  S.ev.push({k:kind==="n"?"QRSn":"QRSw",t}); S.beats.push({t,sv});
+  S.lastV=t; S.vRef=t+0.28; return true;
+}
+S.beats=[];
+function atrDepol(t,paced){
+  if(P.def.r==="fa") return false;
+  if(t-S.lastA<0.25) return false;
+  S.lastA=t; S.ev.push({k:paced?"Pp":"P",t});
+  if(paced && P.def.r==="sinus") S.nextP=t+60/P.def.sr; // suppression du sinus par la stimulation plus rapide
+  if(P.def.cond) S.pendCond=t+(paced?0.2:0.16);
+  return true;
+}
+const senses=m=>({DDD:[1,1],DDI:[1,1],AAI:[1,0],VVI:[0,1],DOO:[0,0],AOO:[0,0],VOO:[0,0]})[m];
+const paces=m=>({DDD:[1,1],DDI:[1,1],AAI:[1,0],VVI:[0,1],DOO:[1,1],AOO:[1,0],VOO:[0,1]})[m];
+let flash={ap:0,as:0,vp:0,vs:0};
+function vSensed(t){ S.lastVdev=t; flash.vs=t; S.pendV=null; S.pvarp=t+0.28; }
+function aSensed(t){
+  S.lastAdev=t; flash.as=t;
+  if(D.mode==="DDD" && S.pendV===null){ S.pendV=Math.max(t+D.av/1000, S.lastVdev+URI); }
+}
+function deliverA(t){
+  S.lastAdev=t; flash.ap=t;
+  if(P.wires!=="AV") return;
+  S.spikes.push({t,c:"A"});
+  if(D.aout>=P.aCap) atrDepol(t,true);
+  // diaphonie : le canal V détecte le spike auriculaire
+  if(P.faults.cross && senses(D.mode)[1] && D.aout>10 && D.vsens<2.5){ S.crossT=t; S.lastVdev=t+0.001; flash.vs=t; S.pendV=null; S.crossBlock=true; }
+}
+function deliverV(t){
+  S.lastVdev=t; flash.vp=t; S.pendV=null; S.pvarp=t+0.28;
+  if(P.faults.disc) return;
+  S.spikes.push({t,c:"V"});
+  const cap=P.vCap*(P.cutane?0.7:1);
+  if(D.vout>=cap) ventDepol(t,"p");
+}
+function step(){
+  const t=(S.t+=DT), m=D.mode, [sa,sv]=senses(m), [pa_,pv]=paces(m), paused=t<D.pauseUntil, LRI=60/D.rate;
+  // bruit (surdétection)
+  if(P.faults.noise>0){
+    if(!S.noiseOn && t>S.nextNoise){ S.noiseOn=true; S.noiseEnd=t+R(1.6,2.6); }
+    if(S.noiseOn && t>S.noiseEnd){ S.noiseOn=false; S.nextNoise=t+R(2,4); }
+  } else S.noiseOn=false;
+  // activité auriculaire propre
+  if(P.def.r==="sinus" && t>=S.nextP){ S.nextP=t+60/P.def.sr*R(0.97,1.03);
+    if(atrDepol(t,false) && sa && P.wires==="AV" && P.pAmp>=D.asens && t>S.pvarp && !paused) aSensed(t); }
+  if(P.def.r==="fa" && sa && P.wires==="AV" && P.fAmp>=D.asens && t>S.pvarp && Math.random()<DT*6 && !paused) aSensed(t);
+  // conduction AV et rythmes ventriculaires propres
+  if(S.pendCond!==null && t>=S.pendCond){ S.pendCond=null; if(ventDepol(t,"n") && sv && P.rAmp>=D.vsens && t-S.lastVdev>0.25 && !paused) vSensed(t); }
+  if(P.def.r==="fa" && t>=S.nextAFv){ S.nextAFv=t+60/P.def.vr*R(0.6,1.4); if(ventDepol(t,"n") && sv && P.rAmp>=D.vsens && t-S.lastVdev>0.25 && !paused) vSensed(t); }
+  const esc=P.def.esc*(P.iso?1.6:1);
+  if(esc>0 && t-S.lastV>60/esc){ if(ventDepol(t,"w") && sv && P.rAmp>=D.vsens && t-S.lastVdev>0.25 && !paused) vSensed(t); }
+  // surdétection du bruit
+  if(S.noiseOn && !paused){
+    if(sv && D.vsens<=P.faults.noise && t-S.lastVdev>0.12){ S.lastVdev=t; flash.vs=t; S.pendV=null; }
+    if(sa && D.asens<=P.faults.noise && P.wires==="AV" && t-S.lastAdev>0.12){ S.lastAdev=t; flash.as=t; }
+  }
+  if(paused) return;
+  // temporisation du boîtier
+  if(m==="VVI"||m==="VOO"){ if(t-S.lastVdev>=LRI) deliverV(t); }
+  else if(m==="AAI"||m==="AOO"){ if(t-S.lastAdev>=LRI) deliverA(t); }
+  else { // DDD, DDI, DOO : cycle déclenché par l'événement ventriculaire
+    const aDue=S.lastVdev+LRI-D.av/1000;
+    if(S.pendV===null && t>=aDue && S.lastAdev<S.lastVdev){ deliverA(t); if(!S.crossBlock) S.pendV=t+D.av/1000; S.crossBlock=false; }
+    if(m==="DDI" && S.pendV===null && t-S.lastVdev>=LRI) deliverV(t);
+    if(S.pendV!==null && t>=S.pendV) deliverV(t);
+    if(t-S.lastVdev>LRI*1.6) { S.lastVdev=t; } // garde-fou
+  }
+}
+// ---------- courbes ----------
+function ecgAt(t){
+  let y=0;
+  for(const e of S.ev){ const d=t-e.t; if(d<-0.1||d>0.7) continue;
+    if(e.k==="P"||e.k==="Pp") y+=0.15*G(d,0.04,0.04);
+    else if(e.k==="QRSn") y+=-0.12*G(d,0,0.009)+1.0*G(d,0.02,0.012)-0.28*G(d,0.042,0.01)+0.28*G(d,0.3,0.06);
+    else if(e.k==="QRSw") y+=0.9*G(d,0.06,0.035)-0.5*G(d,0.13,0.03)-0.33*G(d,0.38,0.07);
+  }
+  if(P.def.r==="fa") y+=0.05*Math.sin(2*Math.PI*5.3*t)+0.04*Math.sin(2*Math.PI*6.9*t+1)+0.03*Math.sin(2*Math.PI*8.1*t+2);
+  if(S.noiseOn) y+=0.13*Math.sin(2*Math.PI*31*t)+0.09*Math.sin(2*Math.PI*47*t+1)+0.05*Math.sin(2*Math.PI*13*t);
+  return y;
+}
+function paStep(t){ // Windkessel : C dP/dt = Q − (P − 5)/R
+  let q=0; for(const b of S.beats){ const d=t-b.t-0.06; if(d>0&&d<0.28) q+=b.sv*Math.PI/(2*0.28)*Math.sin(Math.PI*d/0.28); }
+  S.pa+=DT*(q/1.2-(S.pa-5)/(0.95*1.2)); return S.pa;
+}
+// ---------- affichage ----------
+const cv=$("cv"), small=window.innerWidth<600; if(small){cv.width=480; cv.height=330;}
+const cx=cv.getContext("2d"), W=cv.width, H=cv.height, X0=34, SWEEP=small?4:6, pxs=(W-X0)/SWEEP;
+let col=X0, ecgY=new Array(W).fill(null), paY=new Array(W).fill(null), spk=new Array(W).fill(0), acc=0, last=null;
+const yE=v=>150-v*95, yP=v=>H-12-(v/150)*(H-215);
+function grid(){
+  cx.fillStyle=css("--mon"); cx.fillRect(0,0,W,H);
+  cx.strokeStyle=css("--mon-grid"); cx.fillStyle=css("--mon-text"); cx.font="12px "+css("--f-mono"); cx.lineWidth=1; cx.setLineDash([3,4]);
+  [0,50,100,150].forEach(v=>{const y=yP(v); cx.beginPath(); cx.moveTo(X0,y); cx.lineTo(W,y); cx.stroke(); cx.fillText(String(v),4,y+4);});
+  cx.setLineDash([]); cx.fillText("ECG",4,24); cx.fillText("PA",4,yP(150)-16);
+}
+function draw(){
+  grid();
+  cx.lineWidth=2;
+  cx.strokeStyle=css("--ecg"); cx.beginPath(); let pen=false;
+  for(let x=X0;x<W;x++){ if(x>=col&&x<col+14){pen=false;continue;} const v=ecgY[x]; if(v==null){pen=false;continue;} if(!pen){cx.moveTo(x,yE(v));pen=true;} else cx.lineTo(x,yE(v)); }
+  cx.stroke();
+  for(let x=X0;x<W;x++){ if(spk[x] && !(x>=col&&x<col+14)){ cx.strokeStyle=spk[x]===1?"#7FB6E0":"#F2F2F2"; cx.lineWidth=1.6; cx.beginPath(); cx.moveTo(x,yE(-0.25)); cx.lineTo(x,yE(1.25)); cx.stroke(); } }
+  cx.strokeStyle=css("--art"); cx.lineWidth=2; cx.beginPath(); pen=false;
+  for(let x=X0;x<W;x++){ if(x>=col&&x<col+14){pen=false;continue;} const v=paY[x]; if(v==null){pen=false;continue;} if(!pen){cx.moveTo(x,yP(v));pen=true;} else cx.lineTo(x,yP(v)); }
+  cx.stroke();
+}
+function frame(ts){
+  if(last===null) last=ts; let el=Math.min(0.1,(ts-last)/1000); last=ts;
+  acc+=el; let n=0;
+  while(acc>=DT && n<40){ acc-=DT; n++;
+    step(); const v=ecgAt(S.t), p=paStep(S.t);
+    S.paWin.push([S.t,p]);
+    const px=Math.floor(X0+((S.t%SWEEP)/SWEEP)*(W-X0));
+    if(px!==col){ col=px; spk[px]=0; }
+    ecgY[px]=v; paY[px]=p;
+    while(S.spikes.length){ const s=S.spikes.shift(); spk[px]=s.c==="A"?1:2; }
+  }
+  S.ev=S.ev.filter(e=>S.t-e.t<1); S.beats=S.beats.filter(b=>S.t-b.t<0.5);
+  while(S.paWin.length && S.paWin[0][0]<S.t-4) S.paWin.shift();
+  draw(); readouts(); leds(); night(); requestAnimationFrame(frame);
+}
+let roT=0;
+function readouts(){
+  if(S.t-roT<0.5) return; roT=S.t;
+  const sinceV=S.t-S.lastV;
+  const fc = sinceV>3 ? 0 : S.rr.length ? Math.round(60/(S.rr.slice(-4).reduce((a,b)=>a+b,0)/Math.min(4,S.rr.length))) : 0;
+  $("r-fc").textContent= sinceV>3 ? "ASYST." : fc;
+  const ps=S.paWin.map(x=>x[1]); if(!ps.length) return; const mx=Math.max(...ps), mn=Math.min(...ps), mean=ps.reduce((a,b)=>a+b,0)/ps.length;
+  S.mapNow=mean; $("r-pa").innerHTML=`${Math.round(mx)}/${Math.round(mn)} <small>(${Math.round(mean)})</small>`;
+}
+function leds(){ const t=S.t; [["l-ap","ap"],["l-as","as"],["l-vp","vp"],["l-vs","vs"]].forEach(([id,k])=>$(id).classList.toggle("on",t-flash[k]<0.12)); }
+
+// ---------- interface du boîtier ----------
+function devMsg(t){ $("devmsg").textContent=t; clearTimeout(devMsg.h); devMsg.h=setTimeout(()=>$("devmsg").textContent="",2500); }
+function render(){
+  $("d-rate").textContent=D.rate; $("d-aout").textContent=fmt(D.aout,D.aout%1?1:0); $("d-vout").textContent=fmt(D.vout,D.vout%1?1:0);
+  $("menu").innerHTML=MENU.map(([k,l,u],i)=>`<div class="item ${i===D.menuSel?"sel":""}" data-i="${i}"><span>${l}</span><b>${k==="mode"?D.mode:fmt(D[k],D[k]%1?(D[k]*100%10?2:1):0)} ${u}</b></div>`).join("");
+  $("b-key").setAttribute("aria-pressed",D.locked); $("b-pause").setAttribute("aria-pressed",S.t<D.pauseUntil);
+}
+function bump(k,d){
+  if(D.locked){ devMsg("Boîtier verrouillé : appuyez sur la clé."); return; }
+  const arr=STEPS[k]; let i=arr.indexOf(D[k]); if(i<0) i=arr.findIndex(x=>x>=D[k]);
+  i=Math.max(0,Math.min(arr.length-1,i+d)); D[k]=arr[i];
+  if(k==="mode"){ S.pendV=null; } render(); changed(k);
+}
+document.querySelectorAll(".knob").forEach(b=>b.addEventListener("click",()=>bump(b.dataset.k,+b.dataset.d)));
+$("menu").addEventListener("click",e=>{const it=e.target.closest(".item"); if(it){D.menuSel=+it.dataset.i; render();}});
+$("m-up").addEventListener("click",()=>bump(MENU[D.menuSel][0],1));
+$("m-dn").addEventListener("click",()=>bump(MENU[D.menuSel][0],-1));
+$("m-next").addEventListener("click",()=>{D.menuSel=(D.menuSel+1)%MENU.length; render();});
+$("b-key").addEventListener("click",()=>{D.locked=!D.locked; render(); devMsg(D.locked?"Réglages verrouillés.":"Réglages déverrouillés."); changed("lock");});
+$("b-doo").addEventListener("click",()=>{Object.assign(D,{mode:"DOO",aout:20,vout:25,rate:Math.max(D.rate,80)}); S.pendV=null; render(); devMsg("DOO d'urgence : asynchrone, A 20 mA, V 25 mA."); changed("doo");});
+$("b-pause").addEventListener("click",()=>{ if(S.t<D.pauseUntil){D.pauseUntil=0;} else {D.pauseUntil=S.t+6; devMsg("Pause : stimulation suspendue 6 s.");} render(); setTimeout(render,6100); changed("pause");});
+function setDev(o){ Object.assign(D,{locked:false,pauseUntil:0},o); S.pendV=null; render(); }
+function resetSim(){ Object.assign(S,{lastVdev:S.t, lastAdev:S.t-0.1, pendV:null, pendCond:null, rr:[]}); }
+
+// ---------- actions au lit ----------
+const ACTS=[["conn","Vérifier et serrer les connexions"],["cable","Changer le câble"],["pol","Inverser la polarité des fils"],["cut","Électrode cutanée en pôle +"],["iso","Isoprénaline"],["atro","Atropine"],["tc","Stimulation transcutanée"],["senior","Appeler le senior"]];
+$("acts").innerHTML=ACTS.map(([k,l])=>`<button class="act" data-a="${k}">${l}</button>`).join("");
+function logMsg(t,cls=""){ const d=document.createElement("div"); d.className="alert "+cls; d.textContent=t; const a=$("log"); a.prepend(d); while(a.children.length>3) a.lastChild.remove(); }
+$("acts").addEventListener("click",e=>{ const b=e.target.closest(".act"); if(!b) return; const k=b.dataset.a; act(k); });
+function act(k){
+  const done={conn:()=>{ if(P.faults.disc){P.faults.disc=false; logMsg("La fiche du câble ventriculaire était à moitié sortie du boîtier : rebranchée.");} else logMsg("Connexions vérifiées : tout est bien serré."); },
+    cable:()=>{ if(P.faults.disc){P.faults.disc=false; logMsg("Câble changé : la stimulation passe de nouveau.");} else logMsg("Câble changé : aucun changement."); },
+    pol:()=>{ if(P.vCap>6){P.vCap=Math.round(P.vCap*0.75*2)/2; logMsg("Polarité inversée : le seuil ventriculaire baisse un peu.");} else logMsg("Polarité inversée : pas de changement notable."); },
+    cut:()=>{ if(!P.cutane){P.cutane=true; logMsg("Électrode cutanée posée en pôle positif : le seuil ventriculaire baisse.");} else logMsg("L'électrode cutanée est déjà en place."); },
+    iso:()=>{ P.iso=true; logMsg(P.def.esc>0?"Isoprénaline : l'échappement ventriculaire accélère un peu.":"Isoprénaline : pas d'échappement à accélérer, mais l'inotropisme augmente."); },
+    atro:()=>{ logMsg(P.def.cond?"Atropine : la fréquence sinusale augmente un peu.":"Atropine : sans effet sur un BAV complet de siège bas."); },
+    tc:()=>{ logMsg("Électrodes de stimulation transcutanée posées, prêtes : solution de sauvetage si rien ne capture."); S.tcReady=true; },
+    senior:()=>{ logMsg("Le senior est prévenu et arrive.","call"); S.seniorT=S.t; }};
+  done[k](); changed("act:"+k);
+}
+
+// ---------- APPRENDRE ----------
+const EX=[
+ {id:"capV", t:"Seuil de capture ventriculaire", setup:()=>{ setPatient("bav3",{vCap:PICK([1.5,2,2.5,3,3.5,4])}); setDev({mode:"VVI",rate:80,vout:10,vsens:2}); },
+  ctx:"BAV complet avec échappement à 32/min, stimulé en VVI à 80/min, sortie V à 10 mA. Mesurez le seuil de capture ventriculaire, puis réglez la marge de sécurité.",
+  steps:["La fréquence (80/min) est au-dessus de l'échappement : chaque spike est suivi d'un QRS large.","Baissez la sortie V d'un cran à la fois, en regardant le tracé, jusqu'à la perte de capture (spike sans QRS).","Le seuil est la plus petite sortie qui capture encore. Notez-le.","Remontez la sortie à 2 à 3 fois le seuil, puis validez."],
+  form:`<div class="field"><label for="in-thr">Seuil mesuré</label><input id="in-thr" inputmode="decimal"> mA</div>`,
+  check:()=>thrCheck("V",P.vCap,D.vout,"vout")},
+ {id:"capA", t:"Seuil de capture auriculaire", setup:()=>{ setPatient("brady",{aCap:PICK([1,1.5,2,2.5,3])}); setDev({mode:"AAI",rate:80,aout:10,asens:0.5}); },
+  ctx:"Bradycardie sinusale à 42/min avec conduction AV normale, stimulé en AAI à 80/min, sortie A à 10 mA. Mesurez le seuil de capture auriculaire.",
+  steps:["Chaque spike auriculaire est suivi d'une onde P puis d'un QRS fin, conduit normalement.","Baissez la sortie A jusqu'à la perte de capture : le spike n'est plus suivi d'onde P ni de QRS, la fréquence chute à 42/min.","Notez le seuil.","Remontez à 2 à 3 fois le seuil, puis validez."],
+  form:`<div class="field"><label for="in-thr">Seuil mesuré</label><input id="in-thr" inputmode="decimal"> mA</div>`,
+  check:()=>thrCheck("A",P.aCap,D.aout,"aout")},
+ {id:"sensV", t:"Seuil de détection ventriculaire", setup:()=>{ setPatient("sinus",{rAmp:PICK([4,5,6,8])}); setDev({mode:"VVI",rate:80,vout:10,vsens:2}); },
+  ctx:"Rythme sinusal à 72/min, conduction normale, VVI à 80/min, sensibilité V à 2 mV. Mesurez le seuil de détection ventriculaire.",
+  steps:["Baissez d'abord la fréquence à 60/min, sous le rythme propre : le boîtier est inhibé, le témoin V·S s'allume à chaque QRS.","Augmentez la valeur de sensibilité V (menu, ▲) cran par cran.","Quand le témoin V·S ne s'allume plus et que des spikes apparaissent, le boîtier ne voit plus les QRS : c'est le seuil.","Réglez la sensibilité à la moitié du seuil, puis validez."],
+  form:`<div class="field"><label for="in-thr">Seuil mesuré</label><input id="in-thr" inputmode="decimal"> mV</div>`,
+  check:sensCheck},
+ {id:"mode", t:"Choisir le mode", setup:()=>{ modeIdx=(modeIdx+1)%MODES.length; const c=MODES[modeIdx]; setPatient(c.p,{wires:c.w}); setDev({mode:"VVI",rate:80,aout:10,vout:10,asens:0.5,vsens:2}); },
+  ctx:"", steps:[], form:"", check:modeCheck}];
+const MODES=[
+ {p:"brady",w:"AV",q:"Bradycardie sinusale à 42/min, conduction AV normale, fils auriculaires et ventriculaires.",ok:["AAI","DDD"],best:"AAI",why:"La conduction est normale : stimuler l'oreillette suffit et garde une activation ventriculaire physiologique. Le DDD est acceptable."},
+ {p:"bav3",w:"AV",q:"BAV complet, échappement 32/min, fils auriculaires et ventriculaires.",ok:["DDD"],best:"DDD",why:"Le DDD suit l'oreillette sinusale et stimule le ventricule après le délai AV : la systole auriculaire est préservée."},
+ {p:"bav3",w:"V",q:"BAV complet, échappement 32/min, fils ventriculaires seuls.",ok:["VVI"],best:"VVI",why:"Sans fil auriculaire, seul le ventricule peut être stimulé et détecté. Surveillez la PA : la systole auriculaire n'est plus synchronisée."},
+ {p:"falente",w:"AV",q:"FA lente à 45/min, fils auriculaires et ventriculaires.",ok:["VVI","DDI"],best:"VVI",why:"On ne capture pas une oreillette qui fibrille, et en DDD le ventricule suivrait la FA. VVI (ou DDI, qui ne suit pas l'oreillette)."},
+ {p:"bav3d",w:"AV",q:"BAV complet sans échappement, patient dépendant ; le chirurgien va utiliser le bistouri électrique au lit.",ok:["DOO","VOO"],best:"DOO",why:"Le bistouri électrique serait détecté et inhiberait la stimulation : passage temporaire en asynchrone, puis retour en DDD ensuite."}];
+let modeIdx=-1, exI=0; const exDone=new Set();
+function loadEx(i){
+  exI=i; const e=EX[i]; e.setup(); resetSim();
+  $("ex-chips").innerHTML=EX.map((x,j)=>`<button class="chip ${exDone.has(j)?"done":""}" aria-pressed="${j===i}" data-i="${j}">${x.t}</button>`).join("");
+  $("ex-title").textContent=e.t;
+  if(e.id==="mode"){ const c=MODES[modeIdx]; $("ex-ctx").innerHTML=`<b>Situation ${modeIdx+1}/${MODES.length}.</b> ${c.q}`; $("ex-steps").innerHTML=`<li>Observez le rythme propre (le boîtier est en VVI à 80/min).</li><li>Choisissez le mode dans le menu du boîtier (ligne « Mode », ▲ ▼), puis validez.</li>`; }
+  else { $("ex-ctx").textContent=e.ctx; $("ex-steps").innerHTML=e.steps.map(s=>`<li>${s}</li>`).join(""); }
+  $("ex-form").innerHTML=e.form; $("ex-fb").hidden=true; $("ex-fb").innerHTML="";
+}
+$("ex-chips").addEventListener("click",e=>{const b=e.target.closest(".chip"); if(b) loadEx(+b.dataset.i);});
+$("ex-reset").addEventListener("click",()=>loadEx(exI));
+$("ex-check").addEventListener("click",()=>{ const r=EX[exI].check(); $("ex-fb").hidden=false; $("ex-fb").innerHTML=r.h; if(r.ok){exDone.add(exI); $("ex-chips").querySelectorAll(".chip")[exI].classList.add("done");} });
+const num=id=>{ const v=parseFloat(String(($(id)||{}).value||"").replace(",",".")); return isNaN(v)?null:v; };
+function thrCheck(ch,thr,out,k){
+  const v=num("in-thr"), stepUp=STEPS[k][STEPS[k].indexOf(thr)-1];
+  const L=[]; let ok=true;
+  if(v===null){ return {ok:false,h:`<p class="verdict ko">Indiquez le seuil que vous avez mesuré.</p>`}; }
+  if(Math.abs(v-thr)<0.01) L.push(`<p class="verdict ok">Seuil exact : ${fmt(thr,1)} mA.</p>`);
+  else if(v<thr){ ok=false; L.push(`<p class="verdict ko">Vous avez noté ${fmt(v,1)} mA, mais le seuil est à ${fmt(thr,1)} mA.</p><p>À ${fmt(v,1)} mA, le spike ne capturait plus : il n'était suivi ${ch==="V"?"d'aucun QRS":"ni d'onde P ni de QRS"}. Le seuil est la dernière valeur qui capture, pas la première qui échoue.</p>`); }
+  else { ok=false; L.push(`<p class="verdict ko">Vous avez noté ${fmt(v,1)} mA, mais le seuil est à ${fmt(thr,1)} mA.</p><p>La capture persistait sous ${fmt(v,1)} mA : vous vous êtes arrêté trop tôt. Continuez à baisser jusqu'au premier spike sans ${ch==="V"?"QRS":"onde P"}.</p>`); }
+  if(out<2*thr){ ok=false; L.push(`<p><b>Marge insuffisante :</b> sortie ${ch} à ${fmt(out,1)} mA, soit ${fmt(out/thr,1)} fois le seuil. Le seuil monte avec les jours : réglez au moins ${fmt(2*thr,1)} mA (2 fois), idéalement ${fmt(3*thr,1)} mA.</p>`); }
+  else L.push(`<p>Sortie ${ch} à ${fmt(out,1)} mA : ${fmt(out/thr,1)} fois le seuil, la marge est correcte.</p>`);
+  L.push(`<div class="note">Le seuil se mesure <b>chaque jour</b> et se note sur la feuille de surveillance. Chez un patient dépendant, le test est rapide, la main sur la molette.</div>`);
+  return {ok,h:L.join("")};
+}
+function sensCheck(){
+  const v=num("in-thr"), r=P.rAmp, arr=STEPS.vsens, first=arr.find(x=>x>r), L=[]; let ok=true;
+  if(v===null) return {ok:false,h:`<p class="verdict ko">Indiquez le seuil que vous avez mesuré.</p>`};
+  if(v>=r && v<=first) L.push(`<p class="verdict ok">Exact : le boîtier perd les QRS entre ${fmt(r,0)} et ${fmt(first,0)} mV.</p>`);
+  else if(v<r){ ok=false; L.push(`<p class="verdict ko">À ${fmt(v,1)} mV, le boîtier voyait encore les QRS (le témoin V·S s'allumait).</p><p>Le seuil est la valeur à partir de laquelle les spikes apparaissent : ici entre ${fmt(r,0)} et ${fmt(first,0)} mV.</p>`); }
+  else { ok=false; L.push(`<p class="verdict ko">Vous êtes monté trop haut : la détection était déjà perdue avant ${fmt(v,1)} mV (dès ${fmt(first,0)} mV).</p>`); }
+  if(D.rate>=72){ ok=false; L.push(`<p><b>Fréquence :</b> elle est à ${D.rate}/min. Au-dessus du rythme propre, le boîtier stimule à chaque cycle et il n'y a rien à détecter : baissez-la sous 72/min pour faire le test, puis remettez-la.</p>`); }
+  if(D.vsens>r/2+0.01){ ok=false; L.push(`<p><b>Réglage final :</b> sensibilité à ${fmt(D.vsens,1)} mV. Pour une marge de sécurité, réglez à la moitié du seuil, soit environ ${fmt(r/2,1)} mV ou moins. Rappel : plus la valeur est petite, plus le boîtier est sensible.</p>`); }
+  else L.push(`<p>Sensibilité réglée à ${fmt(D.vsens,1)} mV : la marge est correcte.</p>`);
+  return {ok,h:L.join("")};
+}
+function modeCheck(){
+  const c=MODES[modeIdx], ok=c.ok.includes(D.mode);
+  const wrong={AAI:"L'AAI ne stimule que l'oreillette : il est inutile si la conduction AV est bloquée, et impossible en FA.",
+    VVI:"Le VVI fonctionne, mais il perd la systole auriculaire quand un fil auriculaire est disponible et l'oreillette organisée.",
+    DDD:"Le DDD suit l'oreillette : en FA, il stimulerait le ventricule jusqu'à la fréquence maximale ; avec le bistouri, il serait inhibé.",
+    DDI:"Le DDI ne suit pas l'oreillette : en BAV, l'oreillette et le ventricule seraient dissociés.",
+    DOO:"Le mode asynchrone ne doit servir qu'en urgence ou pendant le bistouri : sans détection, un spike peut tomber sur l'onde T d'un rythme propre.",
+    AOO:"Le mode asynchrone auriculaire ne protège pas un ventricule bloqué.",
+    VOO:"Le mode asynchrone ne doit servir qu'en urgence ou pendant le bistouri : sans détection, un spike peut tomber sur l'onde T."}[D.mode];
+  const h=(ok?`<p class="verdict ok">${D.mode} : adapté.</p>`:`<p class="verdict ko">${D.mode} : pas le meilleur choix ici.</p><p>${wrong}</p>`)+`<div class="note"><b>Mode attendu : ${c.best}.</b> ${c.why}</div><div class="btns"><button class="ghost" id="ex-nextmode">Situation suivante</button></div>`;
+  setTimeout(()=>{const b=$("ex-nextmode"); if(b) b.addEventListener("click",()=>loadEx(3));},0);
+  return {ok:ok && modeIdx===MODES.length-1, h};
+}
+
+// ---------- DÉPANNER ----------
+const FAULTS={
+ over:{n:"Surdétection (artefacts pris pour des QRS)", sig:"des pauses sans aucun spike pendant les artefacts, alors que le témoin V·S clignote sans QRS",
+   ctx:"Patient dépendant (BAV complet, échappement 32/min), VVI à 80/min. Il frissonne et bouge beaucoup.",
+   setup:()=>{ setPatient("bav3",{faults:{noise:3,disc:false,cross:false}}); setDev({mode:"VVI",rate:80,vout:10,vsens:1.5}); S.nextNoise=S.t+1.5; },
+   fixed:()=>D.vsens>3||["VOO","DOO"].includes(D.mode),
+   fixWhy:"Augmenter la valeur de sensibilité V au-dessus de l'amplitude des artefacts (ici plus de 3 mV), ou passer temporairement en VOO.",
+   warn:()=>["VOO","DOO"].includes(D.mode)?"Le mode asynchrone règle le problème, mais il doit rester temporaire : si un rythme propre réapparaît, un spike peut tomber sur l'onde T.":""},
+ cap:{n:"Défaut de capture", sig:"des spikes réguliers non suivis de QRS",
+   ctx:"Patient dépendant (BAV complet, échappement 32/min), DDD à 80/min, J3 postopératoire. L'IDE signale une PA qui baisse.",
+   setup:()=>{ setPatient("bav3",{vCap:11}); setDev({mode:"DDD",rate:80,aout:10,vout:8,asens:0.5,vsens:2}); },
+   fixed:()=>D.vout>=P.vCap*(P.cutane?0.7:1)*1.5,
+   fixWhy:"Augmenter la sortie V (ici au moins 1,5 à 2 fois le nouveau seuil, voire au maximum), vérifier la chaîne, inverser la polarité ou poser une électrode cutanée. Le seuil a monté : il faudra le recontrôler.",
+   warn:()=>""},
+ disc:{n:"Problème de connexion ou de câble", sig:"aucun spike sur l'ECG alors que le témoin V·P du boîtier clignote",
+   ctx:"Patient dépendant (BAV complet, échappement 32/min), VVI à 80/min. Il vient d'être installé au fauteuil.",
+   setup:()=>{ setPatient("bav3",{faults:{noise:0,disc:true,cross:false}}); setDev({mode:"VVI",rate:80,vout:10,vsens:2}); },
+   fixed:()=>!P.faults.disc,
+   fixWhy:"Le boîtier stimule (témoin V·P) mais le courant n'arrive pas au cœur : vérifier et serrer les connexions, changer le câble.",
+   warn:()=>""},
+ under:{n:"Sous-détection", sig:"des spikes qui tombent sans tenir compte des QRS propres, parfois dans le QRS ou sur l'onde T",
+   ctx:"Rythme sinusal à 88/min récupéré, conduction normale. Le boîtier est resté en VVI à 80/min.",
+   setup:()=>{ setPatient("sinus88",{rAmp:2.5}); setDev({mode:"VVI",rate:80,vout:10,vsens:5}); },
+   fixed:()=>D.vsens<=P.rAmp/2+0.01||(D.mode==="VVI"&&false),
+   fixWhy:"Diminuer la valeur de sensibilité V nettement sous l'amplitude des QRS (ici 2,5 mV, donc 1,2 mV ou moins) : le boîtier redevient plus sensible. Patient non dépendant : on peut aussi arrêter la stimulation.",
+   warn:()=>""},
+ cross:{n:"Diaphonie (le canal V détecte le spike A)", sig:"des spikes auriculaires seuls, sans stimulation ventriculaire derrière, avec le témoin V·S qui s'allume juste après chaque spike A",
+   ctx:"Patient dépendant (BAV complet, sinus lent à 55/min, échappement 30/min), DDD à 80/min : l'oreillette est stimulée. On vient de monter la sortie A à 20 mA et la sensibilité V à 1 mV « pour être sûr ».",
+   setup:()=>{ setPatient("bav3lent",{faults:{noise:0,disc:false,cross:true}}); setDev({mode:"DDD",rate:80,aout:20,vout:10,asens:0.5,vsens:1}); },
+   fixed:()=>!(D.aout>10&&D.vsens<2.5)||!senses(D.mode)[1],
+   fixWhy:"Baisser la sortie A (10 mA ou moins si le seuil le permet) et/ou diminuer la sensibilité V (valeur en mV plus grande, 2,5 mV ou plus).",
+   warn:()=>""},
+ af:{n:"FA suivie en mode DDD", sig:"une ligne de base fibrillante avec des QRS stimulés rapides et réguliers, à la fréquence maximale",
+   ctx:"J2 d'un remplacement valvulaire mitral, DDD à 80/min. L'IDE signale une tachycardie à 120/min et une PA à 85 de systolique.",
+   setup:()=>{ setPatient("falente",{fAmp:0.8}); setDev({mode:"DDD",rate:80,aout:10,vout:10,asens:0.5,vsens:2}); },
+   fixed:()=>["VVI","DDI","VOO"].includes(D.mode),
+   fixWhy:"Passer en VVI (ou DDI) : le ventricule ne suit plus l'oreillette, la fréquence revient à la fréquence programmée. Puis traiter la FA elle-même.",
+   warn:()=>D.mode==="VOO"?"Le VOO marche, mais le VVI est préférable : il respecte le rythme propre.":""}};
+const fx={k:null,n:0,ok:0,diagOk:false};
+function newFault(){
+  let k; do{k=PICK(Object.keys(FAULTS));}while(k===fx.k); fx.k=k; FAULTS[k].setup(); resetSim();
+  $("fx-title").textContent="Que se passe-t-il ?"; $("fx-ctx").textContent=FAULTS[k].ctx;
+  $("fx-opts").innerHTML=Object.entries(FAULTS).map(([id,f])=>`<label class="opt" id="fo-${id}"><input type="radio" name="fxd" value="${id}"> <span>${f.n}</span></label>`).join("");
+  ["fx-fb1","fx-fb2"].forEach(i=>{$(i).hidden=true;$(i).innerHTML="";}); $("fx-step2").hidden=true; $("log").innerHTML="";
+}
+$("fx-diag").addEventListener("click",()=>{
+  const s=document.querySelector('input[name="fxd"]:checked'); if(!s){ $("fx-fb1").hidden=false; $("fx-fb1").innerHTML='<p class="verdict ko">Choisissez un diagnostic.</p>'; return; }
+  const c=s.value, k=fx.k, F=FAULTS; fx.diagOk=c===k;
+  document.querySelectorAll('#fx-opts .opt').forEach(o=>o.classList.remove("good","bad")); $("fo-"+k).classList.add("good"); if(c!==k) $("fo-"+c).classList.add("bad");
+  $("fx-fb1").hidden=false;
+  $("fx-fb1").innerHTML = c===k ? `<p class="verdict ok">Exact : ${F[k].n.toLowerCase()}.</p><p>On voit ${F[k].sig}.</p>`
+    : `<p class="verdict ko">Non : c'est ${F[k].n.toLowerCase()}.</p><p><b>Votre erreur d'interprétation.</b> ${F[c].n} donnerait ${F[c].sig}. Ici, on voit ${F[k].sig}.</p>`;
+  $("fx-step2").hidden=false;
+});
+$("fx-check").addEventListener("click",()=>{
+  const f=FAULTS[fx.k], ok=f.fixed(); $("fx-fb2").hidden=false;
+  const w=f.warn(); if(ok){ fx.n++; if(fx.diagOk) fx.ok++; $("fx-score").textContent=`Score : ${fx.ok} / ${fx.n} (diagnostic juste et panne corrigée)`; }
+  $("fx-fb2").innerHTML=(ok?`<p class="verdict ok">Panne corrigée.</p>`:`<p class="verdict ko">La panne persiste : regardez le tracé et les témoins.</p>`)+(w?`<p>${w}</p>`:"")+`<div class="note"><b>Conduite :</b> ${f.fixWhy}</div>`;
+});
+$("fx-next").addEventListener("click",newFault); $("fx-skip").addEventListener("click",newFault);
+
+// ---------- GARDE ----------
+const N={on:false,phase:0,t0:0,evT:0,resT:[],low:0,lastT:0,minMap:200,senior:false,lastCheck:0};
+const NEV=[
+ {at:20, msg:"02:10 · L'IDE : « La PA baisse, le scope sonne. »", go:()=>{P.vCap=14;}, ok:()=>D.vout>=14*(P.cutane?0.7:1)*1.2||D.vout>=P.vCap*(P.cutane?0.7:1)*1.2, lab:"Perte de capture ventriculaire (seuil monté à 14 mA)"},
+ {at:18, msg:"03:40 · Le patient frissonne et s'agite.", go:()=>{P.faults.noise=3; S.nextNoise=S.t+1;}, ok:()=>D.vsens>3||["VOO","DOO"].includes(D.mode), lab:"Surdétection des artefacts de frissons"},
+ {at:18, msg:"05:15 · L'IDE : « Il est à 120, c'est régulier. »", go:()=>{P.def={...PATIENTS.falente,n:"FA (fils A + V)"}; P.fAmp=0.8;}, ok:()=>["VVI","DDI","VOO","DOO"].includes(D.mode)||(D.mode==="DDD"&&D.asens>0.8), lab:"FA suivie par le mode DDD"}];
+$("n-start").addEventListener("click",startNight);
+$("n-stop").addEventListener("click",()=>endNight(true));
+function startNight(){
+  setPatient("bav3",{vCap:4,aCap:1.5}); P.def.esc=28; P.def.n="BAV complet, échappement 28/min";
+  setDev({mode:"DDD",rate:80,aout:10,vout:10,asens:0.5,vsens:2}); resetSim(); $("log").innerHTML="";
+  Object.assign(N,{on:true,phase:0,t0:S.t,evT:S.t,resT:[],low:0,lastT:S.t,minMap:200,senior:false,waiting:true});
+  $("n-start").hidden=true; $("n-stop").hidden=false; $("n-fb").hidden=true; $("n-status").textContent="Garde en cours. Surveillez le moniteur.";
+}
+function night(){
+  if(!N.on) return; const t=S.t;
+  if(t-N.t0>4 && S.mapNow<50) N.low+=t-N.lastT; N.lastT=t;
+  if(t-N.t0>3) N.minMap=Math.min(N.minMap,S.mapNow);
+  const e=NEV[N.phase]; if(!e) return;
+  if(N.waiting && t-N.evT>e.at){ N.waiting=false; N.evStart=t; e.go(); logMsg(e.msg); $("n-status").textContent=`Événement ${N.phase+1} sur 3 en cours…`; }
+  else if(!N.waiting && t-N.lastCheck>0.5){ N.lastCheck=t;
+    if(e.ok()){ N.resT.push(t-N.evStart); logMsg(`Situation corrigée en ${Math.round(t-N.evStart)} s.`); N.phase++; N.evT=t; N.waiting=true;
+      if(N.phase>=NEV.length) setTimeout(()=>endNight(false),4000); else $("n-status").textContent="Situation stable. Restez attentif…"; }
+    else if(t-N.evStart>90){ N.resT.push(null); logMsg("Le senior est arrivé et a repris la main.","call"); e.fixBySenior=true; forceFix(N.phase); N.phase++; N.evT=t; N.waiting=true; if(N.phase>=NEV.length) setTimeout(()=>endNight(false),4000); }
+  }
+}
+function forceFix(i){ if(i===0) setDev({...D,vout:25}); if(i===1) setDev({...D,vsens:5}); if(i===2) setDev({...D,mode:"VVI"}); }
+function endNight(stopped){
+  if(!N.on) return; N.on=false; $("n-start").hidden=false; $("n-start").textContent="Recommencer la garde"; $("n-stop").hidden=true; $("n-status").textContent="";
+  const lowS=Math.round(N.low), called=S.seniorT && S.seniorT>N.t0;
+  const rows=NEV.map((e,i)=>{ const r=N.resT[i]; return `<li><b>${e.lab}</b> : ${r==null?(i<N.resT.length?"non corrigé, repris par le senior":"non atteint"):`corrigé en ${Math.round(r)} s`}${r!=null&&r>30?" (plus de 30 s : trop long chez un patient dépendant)":""}.</li>`; }).join("");
+  const tips=[];
+  if(N.resT[0]==null||N.resT[0]>30) tips.push("Perte de capture chez un patient dépendant : le premier réflexe est la touche DOO ou la sortie V au maximum, puis la chaîne. Chaque seconde compte.");
+  if(["DOO","VOO","AOO"].includes(D.mode)) tips.push("Vous terminez la garde en mode asynchrone. Une fois la situation stable, repassez dans un mode avec détection (VVI, DDI ou DDD) : un rythme propre qui réapparaît exposerait au spike sur l'onde T.");
+  if(!D.locked) tips.push("Le boîtier n'est pas verrouillé : verrouillez-le en quittant la chambre.");
+  if(!called) tips.push("Vous n'avez pas appelé le senior. Pour un patient dépendant qui perd la capture, on l'appelle dès le début, même si on corrige seul.");
+  if(D.vout>=14) tips.push("Le seuil ventriculaire a beaucoup monté : à signaler à l'équipe chirurgicale et au rythmologue, car les fils risquent de ne plus capturer du tout.");
+  $("n-fb").hidden=false;
+  $("n-fb").innerHTML=`<p class="verdict ${N.resT.filter(x=>x!=null&&x<=30).length===3?"ok":"ko"}">Bilan de la garde${stopped?" (interrompue)":""}</p>
+  <div class="sum"><div><span>PAM la plus basse</span><b>${Math.round(N.minMap)} mmHg</b></div><div><span>Temps avec PAM &lt; 50</span><b>${lowS} s</b></div><div><span>Senior appelé</span><b>${called?"oui":"non"}</b></div><div><span>Boîtier verrouillé</span><b>${D.locked?"oui":"non"}</b></div></div>
+  <ul>${rows}</ul>${tips.length?`<div class="note"><b>Points à retravailler</b><ul>${tips.map(x=>`<li>${x}</li>`).join("")}</ul></div>`:`<div class="note">Garde exemplaire : réactions rapides, senior prévenu, boîtier verrouillé.</div>`}`;
+}
+
+// ---------- LIBRE ----------
+$("f-pt").innerHTML=Object.entries(PATIENTS).map(([k,p])=>`<option value="${k}">${p.n}</option>`).join("");
+function loadFree(){ setPatient($("f-pt").value,{wires:$("f-w").value}); resetSim(); $("f-ta").textContent=fmt(P.aCap,1); $("f-tv").textContent=fmt(P.vCap,1); $("f-pa").textContent=fmt(P.pAmp,1); $("f-ra").textContent=fmt(P.rAmp,1); }
+$("f-pt").addEventListener("change",loadFree); $("f-w").addEventListener("change",loadFree);
+
+// ---------- onglets ----------
+let view="learn";
+function changed(){}
+document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.setAttribute("aria-selected",x===t));
+  view=t.dataset.view; ["learn","fix","night","free"].forEach(v=>$("v-"+v).hidden=v!==view);
+  $("bed").hidden = !(view==="fix"||view==="night"||view==="free");
+  if(N.on && view!=="night") endNight(true);
+  $("log").innerHTML="";
+  if(view==="learn") loadEx(exI); if(view==="fix") newFault(); if(view==="free") loadFree();
+  if(view==="night"){ setPatient("bav3"); P.def.esc=28; setDev({mode:"DDD",rate:80,aout:10,vout:10,asens:0.5,vsens:2}); resetSim(); }
+}));
+render(); loadEx(0); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
